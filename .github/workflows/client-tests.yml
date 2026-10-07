@@ -30,8 +30,7 @@ jobs:
     - name: Установка системных зависимостей (Xvfb, OpenGL и Qt6)
       run: |
         sudo apt-get update
-        # Расширенный список зависимостей для устранения ошибки libEGL.so.1 и других проблем Qt6 в headless-режиме
-        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 libxcb-cursor0 x11-utils libegl1 libegl1-mesa libgl1 libglib2.0-0 libfontconfig1 libdbus-1-3
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 libxcb-cursor0 x11-utils libegl1 libgl1 libglib2.0-0 libfontconfig1 libdbus-1-3
 
     - name: Установка Python-библиотек
       run: |
@@ -41,6 +40,5 @@ jobs:
 
     - name: Запуск модульных тестов со 100% покрытием
       env:
-        # Указываем Qt использовать плагин xcb для отрисовки через Xvfb
         QT_QPA_PLATFORM: xcb
       run: xvfb-run -a python -m pytest tests/ --cov=network --cov=ui --cov=utils --cov-report=xml
