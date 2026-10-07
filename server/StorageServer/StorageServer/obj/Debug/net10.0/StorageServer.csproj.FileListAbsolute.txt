@@ -1,0 +1,14 @@
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/bin/Debug/net10.0/StorageServer
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/bin/Debug/net10.0/StorageServer.deps.json
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/bin/Debug/net10.0/StorageServer.runtimeconfig.json
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/bin/Debug/net10.0/StorageServer.dll
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/bin/Debug/net10.0/StorageServer.pdb
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.GeneratedMSBuildEditorConfig.editorconfig
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.AssemblyInfoInputs.cache
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.AssemblyInfo.cs
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.csproj.CoreCompileInputs.cache
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.dll
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/refint/StorageServer.dll
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.pdb
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/StorageServer.genruntimeconfig.cache
+/Users/kolosila/Documents/4/PSP/FileVault/server/StorageServer/StorageServer/obj/Debug/net10.0/ref/StorageServer.dll
