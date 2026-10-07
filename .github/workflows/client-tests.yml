@@ -1,0 +1,44 @@
+name: Client Tests (Python)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'client/**'
+      - '.github/workflows/client-tests.yml'
+  pull_request:
+    branches: [ "main", "master" ]
+    paths:
+      - 'client/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./client
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Настройка Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+        cache: 'pip'
+
+    - name: Установка системных зависимостей (Xvfb)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils
+
+    - name: Установка Python-библиотек
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-qt pytest-mock
+
+    - name: Запуск модульных тестов со 100% покрытием
+      env:
+        QT_QPA_PLATFORM: xcb
+      run: xvfb-run -a python -m pytest tests/ --cov=network --cov=ui --cov=utils --cov-report=xml
