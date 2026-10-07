@@ -36,7 +36,7 @@ public class ClientSession
                 string? commandLine = await stream.ReadCommandLineAsync();
                 if (commandLine == null) break; // Клиент отключился
 
-                // Используем наш новый CommandParser
+                // Используем новый CommandParser
                 var command = CommandParser.Parse(commandLine);
                 if (command.IsEmpty) continue;
 
