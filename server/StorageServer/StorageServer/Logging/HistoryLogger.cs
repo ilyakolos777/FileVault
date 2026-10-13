@@ -16,7 +16,12 @@ public class HistoryLogger
 
     public void LogAction(string user, string action, string filename)
     {
-        string record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\t{user}\t{action}\t{filename}\n";
+        // Защита от TSV-инъекций
+        string safeUser = user.Replace("\t", " ").Replace("\n", " ").Replace("\r", " ");
+        string safeAction = action.Replace("\t", " ").Replace("\n", " ").Replace("\r", " ");
+        string safeFilename = filename.Replace("\t", " ").Replace("\n", " ").Replace("\r", " ");
+
+        string record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\t{safeUser}\t{safeAction}\t{safeFilename}\n";
         
         lock (_fileLock)
         {
@@ -32,7 +37,9 @@ public class HistoryLogger
             if (string.IsNullOrEmpty(filterFilename)) 
                 return string.Join("\n", lines);
 
-            var filtered = lines.Where(l => l.StartsWith("DATE") || l.EndsWith($"\t{filterFilename}") || l.EndsWith($"\t{filterFilename}.bak"));
+            // Безопасный поиск с учетом санитаризованных имен
+            string safeFilter = filterFilename.Replace("\t", " ").Replace("\n", " ").Replace("\r", " ");
+            var filtered = lines.Where(l => l.StartsWith("DATE") || l.EndsWith($"\t{safeFilter}") || l.EndsWith($"\t{safeFilter}.bak"));
             return string.Join("\n", filtered);
         }
     }

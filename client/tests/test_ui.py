@@ -73,7 +73,7 @@ def test_upload_action_success(app_window, mocker):
     mocker.patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("/fake/path.txt", ""))
     mock_start = mocker.patch.object(app_window, "_start_transfer")
     app_window.upload_action()
-    mock_start.assert_called_once_with("upload", "/fake/path.txt", "path.txt")
+    mock_start.assert_called_once_with("upload", "/fake/path.txt", "path.txt", is_bak=False, offset=0)
 
 
 def test_upload_action_cancel(app_window, mocker):
@@ -97,7 +97,7 @@ def test_download_action_success(app_window, mocker):
     mocker.patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/local/file.txt", ""))
     mock_start = mocker.patch.object(app_window, "_start_transfer")
     app_window.download_action()
-    mock_start.assert_called_once_with("download", "/local/file.txt", "file.txt", False)
+    mock_start.assert_called_once_with("download", "/local/file.txt", "file.txt", False, offset=0)
 
 
 def test_delete_action_success(app_window, mocker):

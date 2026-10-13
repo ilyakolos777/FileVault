@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using System.Text;
 using System.IO;
+using System.Collections.Concurrent;
 using StorageServer.Logging;
 using StorageServer.Protocol;
 using StorageServer.Storage;
@@ -9,6 +10,10 @@ namespace StorageServer;
 
 public class ClientSession
 {
+    private static readonly ConcurrentDictionary<string, ClientSession> ActiveUsers = new(StringComparer.OrdinalIgnoreCase);
+    // Блокировка файлов: Ключ - имя файла, Значение - флаг занятости
+    private static readonly ConcurrentDictionary<string, byte> ActiveFiles = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly TcpClient _client;
     private readonly StorageManager _storage;
     private readonly HistoryLogger _logger;
@@ -34,9 +39,8 @@ public class ClientSession
             while (_client.Connected)
             {
                 string? commandLine = await stream.ReadCommandLineAsync();
-                if (commandLine == null) break; // Клиент отключился
+                if (commandLine == null) break;
 
-                // Используем новый CommandParser
                 var command = CommandParser.Parse(commandLine);
                 if (command.IsEmpty) continue;
 
@@ -56,8 +60,24 @@ public class ClientSession
         }
         finally
         {
+            if (_username != "Anonymous") ActiveUsers.TryRemove(_username, out _);
             _client.Close();
             ConsoleLogger.LogInfo($"Клиент отключен: {clientEndpoint} ({_username})");
+        }
+    }
+
+    // Хелпер для безопасного эксклюзивного доступа к файлу
+    private async Task ExecuteWithFileLockAsync(string filename, Func<Task> action)
+    {
+        if (!ActiveFiles.TryAdd(filename, 1))
+            throw new IOException($"Файл '{filename}' занят другой операцией.");
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            ActiveFiles.TryRemove(filename, out _);
         }
     }
 
@@ -67,7 +87,10 @@ public class ClientSession
         {
             case "AUTH":
                 if (args.Length < 2) throw new ArgumentException("Использование: AUTH <username>");
-                _username = args[1];
+                string reqUser = args[1];
+                if (!ActiveUsers.TryAdd(reqUser, this))
+                    throw new UnauthorizedAccessException("Пользователь с таким логином уже находится в системе.");
+                _username = reqUser;
                 await SendTextResponseAsync(stream, "Authenticated");
                 break;
 
@@ -78,30 +101,41 @@ public class ClientSession
 
             case "GET":
                 if (args.Length < 2) throw new ArgumentException("Использование: GET <filename> [offset]");
-                string filename = args[1];
-                long offset = args.Length > 2 ? long.Parse(args[2]) : 0;
-                await HandleGetAsync(stream, filename, offset, buffer);
+                string getFile = args[1];
+                long getOffset = args.Length > 2 ? long.Parse(args[2]) : 0;
+                await ExecuteWithFileLockAsync(getFile, () => HandleGetAsync(stream, getFile, getOffset, buffer));
                 break;
 
             case "PUT":
-                if (args.Length < 3) throw new ArgumentException("Использование: PUT <filename> <size>");
+                if (args.Length < 3) throw new ArgumentException("Использование: PUT <filename> <size> [offset]");
                 string putFile = args[1];
                 long size = long.Parse(args[2]);
-                await HandlePutAsync(stream, putFile, size, buffer);
+                long putOffset = args.Length > 3 ? long.Parse(args[3]) : 0;
+                await ExecuteWithFileLockAsync(putFile, () => HandlePutAsync(stream, putFile, size, putOffset, buffer));
                 break;
 
             case "DELETE":
                 if (args.Length < 2) throw new ArgumentException("Использование: DELETE <filename>");
-                _storage.DeleteFile(args[1]);
-                _logger.LogAction(_username, "DELETE", args[1]);
-                await SendTextResponseAsync(stream, "File deleted");
+                string delFile = args[1];
+                await ExecuteWithFileLockAsync(delFile, async () => {
+                    _storage.DeleteFile(delFile);
+                    _logger.LogAction(_username, "DELETE", delFile);
+                    await SendTextResponseAsync(stream, "File deleted");
+                });
                 break;
 
             case "RENAME":
                 if (args.Length < 3) throw new ArgumentException("Использование: RENAME <old_name> <new_name>");
-                _storage.RenameFile(args[1], args[2]);
-                _logger.LogAction(_username, "RENAME", $"{args[1]} -> {args[2]}");
-                await SendTextResponseAsync(stream, "File renamed");
+                string oldName = args[1];
+                string newName = args[2];
+                // Блокируем сразу оба имени, чтобы избежать коллизий
+                await ExecuteWithFileLockAsync(oldName, async () => {
+                    await ExecuteWithFileLockAsync(newName, async () => {
+                        _storage.RenameFile(oldName, newName);
+                        _logger.LogAction(_username, "RENAME", $"{oldName} -> {newName}");
+                        await SendTextResponseAsync(stream, "File renamed");
+                    });
+                });
                 break;
 
             case "HISTORY":
@@ -111,7 +145,7 @@ public class ClientSession
                 break;
 
             case "QUIT":
-                _client.Close(); // Завершит цикл в HandleAsync
+                _client.Close();
                 break;
 
             default:
@@ -127,45 +161,35 @@ public class ClientSession
         fs.Seek(offset, SeekOrigin.Begin);
         long payloadLength = fs.Length - offset;
 
-        // Отправляем заголовок ответа
         string header = $"{ProtocolConstants.Ok} {payloadLength} {fs.Length}{ProtocolConstants.Terminator}";
         await stream.WriteAsync(Encoding.UTF8.GetBytes(header));
 
-        // Отправляем сырые байты файла
         await fs.CopyToBoundedAsync(stream, payloadLength, buffer);
         _logger.LogAction(_username, offset > 0 ? "DOWNLOAD_RESUME" : "DOWNLOAD", filename);
     }
 
-    private async Task HandlePutAsync(NetworkStream stream, string filename, long size, byte[] buffer)
+    private async Task HandlePutAsync(NetworkStream stream, string filename, long size, long offset, byte[] buffer)
     {
-        // Проверяем место через DiskChecker
         if (!_storage.Disk.HasFreeSpace(size))
             throw new IOException("Недостаточно места на сервере", new Exception(ProtocolConstants.ErrNoSpace));
 
-        _storage.BackupIfExists(filename); // Создаем .bak по условию ТЗ
+        if (offset == 0) _storage.BackupIfExists(filename); // Бэкап делаем только при полной перезаписи
 
-        // Считываем сырые байты прямо из сокета в файл
-        using (var fs = _storage.OpenWrite(filename))
+        using (var fs = _storage.OpenWrite(filename, offset))
         {
             await stream.CopyToBoundedAsync(fs, size, buffer);
         }
 
-        _logger.LogAction(_username, "UPLOAD", filename);
+        _logger.LogAction(_username, offset > 0 ? "UPLOAD_RESUME" : "UPLOAD", filename);
         await SendTextResponseAsync(stream, "File uploaded successfully");
     }
 
     private async Task SendTextResponseAsync(NetworkStream stream, string payload)
     {
         byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
-        // Отправляем заголовок с точным размером
         string header = $"{ProtocolConstants.Ok} {payloadBytes.Length}{ProtocolConstants.Terminator}";
         await stream.WriteAsync(Encoding.UTF8.GetBytes(header));
-    
-        // Отправляем тело, если оно есть
-        if (payloadBytes.Length > 0)
-        {
-            await stream.WriteAsync(payloadBytes);
-        }
+        if (payloadBytes.Length > 0) await stream.WriteAsync(payloadBytes);
     }
 
     private async Task SendErrorAsync(NetworkStream stream, Exception ex)
@@ -177,6 +201,6 @@ public class ClientSession
         if (ex.InnerException?.Message == ProtocolConstants.ErrNoSpace) code = ProtocolConstants.ErrNoSpace;
 
         string errorMsg = $"{ProtocolConstants.Error} {code} {ex.Message}{ProtocolConstants.Terminator}";
-        try { await stream.WriteAsync(Encoding.UTF8.GetBytes(errorMsg)); } catch { /* Игнорируем ошибки отправки */ }
+        try { await stream.WriteAsync(Encoding.UTF8.GetBytes(errorMsg)); } catch { }
     }
 }

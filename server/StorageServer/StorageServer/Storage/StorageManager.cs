@@ -5,8 +5,6 @@ namespace StorageServer.Storage;
 public class StorageManager
 {
     private readonly string _rootPath;
-    
-    // Свойство для доступа к модулю проверки диска
     public DiskChecker Disk { get; }
 
     public StorageManager(string rootPath)
@@ -16,20 +14,15 @@ public class StorageManager
         {
             Directory.CreateDirectory(_rootPath);
         }
-        
-        // Инициализируем класс проверки диска
         Disk = new DiskChecker(_rootPath);
     }
 
-    // Критически важно: защита от Path Traversal (../../etc/passwd)
+    // Абсолютная защита от Path Traversal (игнорирует любые попытки выйти из папки)
     public string GetSafePath(string filename)
     {
-        var targetPath = Path.GetFullPath(Path.Combine(_rootPath, filename));
-        if (!targetPath.StartsWith(_rootPath + Path.DirectorySeparatorChar) && targetPath != _rootPath)
-        {
-            throw new UnauthorizedAccessException("Попытка выхода за пределы корневой директории.");
-        }
-        return targetPath;
+        string safeFileName = Path.GetFileName(filename);
+        if (string.IsNullOrWhiteSpace(safeFileName)) throw new ArgumentException("Недопустимое имя файла.");
+        return Path.Combine(_rootPath, safeFileName);
     }
 
     public void BackupIfExists(string filename)
@@ -46,7 +39,7 @@ public class StorageManager
     {
         var dirInfo = new DirectoryInfo(_rootPath);
         var files = dirInfo.GetFiles("*", SearchOption.TopDirectoryOnly)
-                           .Where(f => !f.Name.EndsWith(".bak")) // Бэкапы скрываем из основного списка
+                           .Where(f => !f.Name.EndsWith(".bak"))
                            .ToList();
 
         var lines = files.Select(f => 
@@ -65,9 +58,17 @@ public class StorageManager
         return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
 
-    public FileStream OpenWrite(string filename)
+    // Поддержка режима докачки (Append)
+    public FileStream OpenWrite(string filename, long offset = 0)
     {
         var path = GetSafePath(filename);
+        if (offset > 0)
+        {
+            if (!File.Exists(path)) throw new FileNotFoundException("Файл для докачки не найден.");
+            var fs = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
+            fs.Seek(offset, SeekOrigin.Begin);
+            return fs;
+        }
         return new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
     }
 
@@ -77,7 +78,7 @@ public class StorageManager
         if (File.Exists(path)) File.Delete(path);
         
         var bakPath = path + ".bak";
-        if (File.Exists(bakPath)) File.Delete(bakPath); // Удаляем и бэкап тоже
+        if (File.Exists(bakPath)) File.Delete(bakPath);
     }
 
     public void RenameFile(string oldName, string newName)

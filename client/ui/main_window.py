@@ -277,6 +277,11 @@ class MainWindow(QMainWindow):
         self.connected = False
         self._workers = set()
 
+        # Таймер для фонового автообновления списка
+        self.poll_timer = QTimer(self)
+        self.poll_timer.setInterval(3000)  # Проверка каждые 3 секунды
+        self.poll_timer.timeout.connect(self.silent_poll)
+
         self._init_ui()
         self._set_login_mode()
 
@@ -296,10 +301,8 @@ class MainWindow(QMainWindow):
 
     def _set_login_mode(self):
         self.stacked_widget.setCurrentIndex(0)
-
         self.page_workspace.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self.page_login.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-
         self.setMinimumSize(420, 520)
         self.setMaximumSize(420, 520)
         self.resize(420, 520)
@@ -307,10 +310,8 @@ class MainWindow(QMainWindow):
 
     def _set_workspace_mode(self):
         self.stacked_widget.setCurrentIndex(1)
-
         self.page_login.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         self.page_workspace.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-
         self.setMaximumSize(16777215, 16777215)
         self.setMinimumSize(900, 600)
         self.resize(1050, 700)
@@ -319,13 +320,10 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
-
         self.page_login = QWidget()
         self.page_workspace = QWidget()
-
         self._build_login_screen()
         self._build_workspace_screen()
-
         self.stacked_widget.addWidget(self.page_login)
         self.stacked_widget.addWidget(self.page_workspace)
 
@@ -358,7 +356,6 @@ class MainWindow(QMainWindow):
         card_layout.addWidget(self.port_input)
         card_layout.addWidget(QLabel("Пользователь"))
         card_layout.addWidget(self.user_input)
-
         card_layout.addStretch()
 
         self.btn_connect = LiquidButton("Подключиться")
@@ -380,7 +377,6 @@ class MainWindow(QMainWindow):
         toolbar_layout.setContentsMargins(16, 16, 16, 16)
         toolbar_layout.setSpacing(10)
 
-        self.btn_refresh = QPushButton("Обновить")
         self.btn_upload = QPushButton("Загрузить файл")
         self.btn_upload.setObjectName("primaryBtn")
         self.btn_download = QPushButton("Скачать")
@@ -392,7 +388,6 @@ class MainWindow(QMainWindow):
         self.btn_delete.setObjectName("dangerBtn")
         self.btn_disconnect = QPushButton("Отключиться")
 
-        self.btn_refresh.clicked.connect(self.load_file_list)
         self.btn_upload.clicked.connect(self.upload_action)
         self.btn_download.clicked.connect(lambda: self.download_action(False))
         self.btn_download_bak.clicked.connect(lambda: self.download_action(True))
@@ -402,7 +397,7 @@ class MainWindow(QMainWindow):
         self.btn_history_all.clicked.connect(lambda: self.history_action(""))
         self.btn_disconnect.clicked.connect(self.action_disconnect)
 
-        buttons = [self.btn_refresh, self.btn_upload, self.btn_download, self.btn_download_bak,
+        buttons = [ self.btn_upload, self.btn_download, self.btn_download_bak,
                    self.btn_rename, self.btn_history_file, self.btn_history_all,
                    self.btn_delete, self.btn_disconnect]
 
@@ -411,7 +406,6 @@ class MainWindow(QMainWindow):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             toolbar_layout.addWidget(btn)
         toolbar_layout.addStretch()
-
         layout.addWidget(toolbar_card)
 
         self.table = QTableWidget(0, 4)
@@ -452,17 +446,29 @@ class MainWindow(QMainWindow):
             self.client.connect(host, port, user)
             self.connected = True
             self.status_label.setText(f"Подключено как {user}")
-
             self._set_workspace_mode()
             self.load_file_list()
+            self.poll_timer.start()  # Включаем фоновый поллинг файлов
         except Exception as e:
             QMessageBox.critical(self, "Ошибка подключения", str(e))
 
     def action_disconnect(self):
+        self.poll_timer.stop()  # Останавливаем таймер
         self.client.disconnect()
         self.connected = False
         self.table.setRowCount(0)
         self._set_login_mode()
+
+    def silent_poll(self):
+        # Тихий поллинг, только если нет активных задач (скачивания или загрузки)
+        if len(self._workers) > 0:
+            return
+        worker = ActionWorker(self.client.get_list)
+        worker.finished.connect(self._populate_table)
+        self._workers.add(worker)
+        worker.finished.connect(lambda *args: self._workers.discard(worker))
+        worker.error.connect(lambda *args: self._workers.discard(worker))
+        worker.start()
 
     def load_file_list(self):
         worker = ActionWorker(self.client.get_list)
@@ -471,6 +477,7 @@ class MainWindow(QMainWindow):
         self._run_worker(worker)
 
     def _populate_table(self, data: str):
+        selected_filename = self.get_selected_filename()
         self.table.setRowCount(0)
         if not data: return
 
@@ -480,28 +487,32 @@ class MainWindow(QMainWindow):
             parts = line.split('|')
             if len(parts) == 4:
                 safe_name = unquote(parts[0])
+                exact_bytes = int(parts[1])
 
                 item_name = QTableWidgetItem(safe_name)
-                item_size = QTableWidgetItem(format_size(int(parts[1])))
+                item_size = QTableWidgetItem(format_size(exact_bytes))
+                item_size.setData(Qt.ItemDataRole.UserRole, exact_bytes)  # Сохраняем точные байты
                 item_date = QTableWidgetItem(parts[2])
 
                 has_bak = parts[3] == "has_bak"
                 item_bak = QTableWidgetItem("• Доступна" if has_bak else "-")
-                if has_bak:
-                    item_bak.setForeground(QColor("#00E676"))
-                else:
-                    item_bak.setForeground(QColor("#554F70"))
+                item_bak.setForeground(QColor("#00E676") if has_bak else QColor("#554F70"))
 
                 muted_color = QColor("#837CA6")
                 item_size.setForeground(muted_color)
                 item_date.setForeground(muted_color)
-
                 item_size.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
                 self.table.setItem(row, 0, item_name)
                 self.table.setItem(row, 1, item_size)
                 self.table.setItem(row, 2, item_date)
                 self.table.setItem(row, 3, item_bak)
+
+        if selected_filename:
+            for row in range(self.table.rowCount()):
+                if self.table.item(row, 0).text() == selected_filename:
+                    self.table.selectRow(row)
+                    break
 
     def get_selected_filename(self) -> str:
         row = self.table.currentRow()
@@ -512,21 +523,43 @@ class MainWindow(QMainWindow):
         local_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл для загрузки")
         if not local_path: return
         filename = os.path.basename(local_path)
-        self._start_transfer("upload", local_path, filename)
+        offset = 0
 
-    def download_action(self, is_bak: bool = False):
-        filename = self.get_selected_filename()
-        if not filename:
-            return QMessageBox.warning(self, "Внимание", "Выберите файл в списке.")
+        # Умная проверка на докачку (Resumable Upload)
+        for row in range(self.table.rowCount()):
+            if self.table.item(row, 0).text() == filename:
+                remote_bytes = self.table.item(row, 1).data(Qt.ItemDataRole.UserRole)
+                local_bytes = os.path.getsize(local_path)
 
-        if is_bak and self.table.item(self.table.currentRow(), 3).text() == "-":
-            return QMessageBox.warning(self, "Внимание", "У этого файла нет резервной копии.")
+                if remote_bytes > 0:
+                    reply = QMessageBox.question(
+                        self, "Файл существует",
+                        f"Файл {filename} уже есть на сервере.\nРазмер на сервере: {format_size(remote_bytes)}\nРазмер на клиенте: {format_size(local_bytes)}\n\nХотите докачать файл (Да) или перезаписать с нуля (Нет)?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+                    )
+                    if reply == QMessageBox.StandardButton.Cancel:
+                        return
+                    elif reply == QMessageBox.StandardButton.Yes:
+                        if remote_bytes >= local_bytes:
+                            QMessageBox.warning(self, "Ошибка",
+                                                "Размер файла на сервере больше или равен локальному. Докачка невозможна.")
+                            return
+                        offset = remote_bytes
+                break
 
-        default_name = filename + ".bak" if is_bak else filename
-        local_path, _ = QFileDialog.getSaveFileName(self, "Сохранить файл как", default_name)
-        if not local_path: return
+        self._start_transfer("upload", local_path, filename, is_bak=False, offset=offset)
 
-        self._start_transfer("download", local_path, filename, is_bak)
+    def _start_transfer(self, action: str, local_path: str, remote_name: str, is_bak: bool = False, offset: int = 0):
+        self.progress_bar.show()
+        self.progress_bar.setValue(0)
+        self.status_label.setText("Синхронизация..." if action == "upload" else "Загрузка...")
+        self.status_label.setStyleSheet("color: #6C5DD3; font-weight: 600;")
+
+        transfer_worker = TransferWorker(action, self.client, local_path, remote_name, is_bak, offset)
+        transfer_worker.progress.connect(self._update_progress)
+        transfer_worker.finished.connect(self._transfer_finished)
+        transfer_worker.error.connect(self._transfer_error)
+        self._run_worker(transfer_worker)
 
     def _start_transfer(self, action: str, local_path: str, remote_name: str, is_bak: bool = False):
         self.progress_bar.show()

@@ -261,4 +261,32 @@ public class ClientSessionTests : IDisposable
             Assert.Equal("56789", getResp); 
         });
     }
+    
+    [Fact]
+    public async Task PutFile_WithOffset_ResumesUpload()
+    {
+        await RunSessionTestAsync(async (client, stream) =>
+        {
+            await SendCommandAsync(stream, "AUTH Admin_ResumePut");
+            await ReadTextResponseAsync(stream);
+
+            // Создаем файл на сервере (первые 5 байт)
+            File.WriteAllText(Path.Combine(_tempDir, "put_resume.txt"), "12345");
+
+            // Отправляем остаток (67890) со смещением 5
+            string fileData = "67890";
+            byte[] dataBytes = Encoding.UTF8.GetBytes(fileData);
+            
+            // PUT <filename> <size> <offset>
+            await SendCommandAsync(stream, $"PUT put_resume.txt {dataBytes.Length} 5");
+            await stream.WriteAsync(dataBytes);
+            
+            string putResp = await ReadTextResponseAsync(stream);
+            Assert.Equal("File uploaded successfully", putResp);
+            
+            // Проверяем, что файл "склеился"
+            string finalContent = File.ReadAllText(Path.Combine(_tempDir, "put_resume.txt"));
+            Assert.Equal("1234567890", finalContent);
+        });
+    }
 }

@@ -22,18 +22,19 @@ class TransferWorker(QThread):
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
-    def __init__(self, action: str, client: StorageClient, local_path: str, remote_name: str, is_bak: bool = False):
+    def __init__(self, action: str, client: StorageClient, local_path: str, remote_name: str, is_bak: bool = False, offset: int = 0):
         super().__init__()
         self.action = action
         self.client = client
         self.local_path = local_path
         self.remote_name = remote_name
         self.is_bak = is_bak
+        self.offset = offset # Добавлено смещение
 
     def run(self):
         try:
             if self.action == "upload":
-                self.client.upload_file(self.local_path, self.remote_name, self._report)
+                self.client.upload_file(self.local_path, self.remote_name, self.offset, self._report)
             elif self.action == "download":
                 self.client.download_file(self.remote_name, self.local_path, self.is_bak, self._report)
             self.finished.emit()

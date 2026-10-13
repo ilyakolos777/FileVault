@@ -16,11 +16,17 @@ class StorageClient:
     def connect(self, host: str, port: int, username: str):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(10.0)
-        self.sock.connect((host, port))
-        self.sock.settimeout(None)
 
-        self._send_cmd(f"AUTH {username}")
-        self._read_text_response()
+        try:
+            self.sock.connect((host, port))
+            self.sock.settimeout(None)
+
+            self._send_cmd(f"AUTH {username}")
+            self._read_text_response()
+        except Exception:
+            # ВАЖНО: Если сервер вернул 403 (логин занят), закрываем сокет
+            self.disconnect()
+            raise
 
     def disconnect(self):
         with self.lock:
@@ -116,18 +122,23 @@ class StorageClient:
                     if callback:
                         callback(offset + received, total_size)
 
-    def upload_file(self, local_path: str, remote_name: str, callback=None):
+    def upload_file(self, local_path: str, remote_name: str, offset: int = 0, callback=None):
         size = os.path.getsize(local_path)
+        payload_size = size - offset
+
         with self.lock:
-            self._send_cmd(f"PUT {quote(remote_name)} {size}")
+            # Отправляем PUT с указанием размера полезной нагрузки и смещения
+            self._send_cmd(f"PUT {quote(remote_name)} {payload_size} {offset}")
 
             with open(local_path, "rb") as f:
+                f.seek(offset)  # Сдвигаем указатель для докачки
                 sent = 0
-                while sent < size:
-                    chunk = f.read(65536)
+                while sent < payload_size:
+                    chunk = f.read(min(65536, payload_size - sent))
+                    if not chunk: break
                     self.sock.sendall(chunk)
                     sent += len(chunk)
                     if callback:
-                        callback(sent, size)
+                        callback(offset + sent, size)
 
             self._read_text_response()

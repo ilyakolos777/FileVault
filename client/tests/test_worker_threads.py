@@ -29,18 +29,18 @@ def test_action_worker_error(qtbot):
 
 def test_transfer_worker_upload(qtbot, mocker):
     mock_client = mocker.MagicMock(spec=StorageClient)
-    worker = TransferWorker("upload", mock_client, "/local.txt", "remote.txt")
+    # Передаем offset=10
+    worker = TransferWorker("upload", mock_client, "/local.txt", "remote.txt", offset=10)
 
     with qtbot.waitSignal(worker.finished, timeout=1000):
         worker.run()
 
     mock_client.upload_file.assert_called_once()
-
-    # Берем все позиционные аргументы, с которыми был вызван метод
     args = mock_client.upload_file.call_args[0]
     assert args[0] == "/local.txt"
     assert args[1] == "remote.txt"
-    assert callable(args[2])  # Проверяем, что третьим аргументом передан callback
+    assert args[2] == 10 
+    assert callable(args[3])
 
 
 def test_transfer_worker_download(qtbot, mocker):

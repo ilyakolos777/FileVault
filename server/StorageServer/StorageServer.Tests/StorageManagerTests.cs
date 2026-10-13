@@ -106,4 +106,13 @@ public class StorageManagerTests : IDisposable
     {
         Assert.Throws<FileNotFoundException>(() => _storage.OpenRead("missing.txt"));
     }
+    
+    [Fact]
+    public void GetSafePath_PathTraversalAttempt_ReturnsOnlyFilename()
+    {
+        // Метод должен проигнорировать злонамеренный путь и вытащить только "cmd.exe"
+        string expected = Path.Combine(_tempDir, "cmd.exe");
+        string actual = _storage.GetSafePath("../../../windows/system32/cmd.exe");
+        Assert.Equal(expected, actual);
+    }
 }

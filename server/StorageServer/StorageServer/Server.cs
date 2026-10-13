@@ -32,7 +32,6 @@ public class Server
                 var client = await _listener.AcceptTcpClientAsync();
                 var session = new ClientSession(client, _storage, _logger);
                 
-                // Запускаем сессию в отдельном Task (параллельная обработка клиентов по ТЗ)
                 _ = Task.Run(() => session.HandleAsync());
             }
             catch (Exception ex)
