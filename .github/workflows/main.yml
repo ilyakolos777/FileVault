@@ -15,20 +15,25 @@ jobs:
         working-directory: ./client
     steps:
     - uses: actions/checkout@v4
+    
     - name: Настройка Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.14' # Версия из твоих логов
+        python-version: '3.14'
         cache: 'pip'
-    - name: Установка системных зависимостей (Xvfb)
+        
+    - name: Установка системных зависимостей (Xvfb, OpenGL и Qt6)
       run: |
         sudo apt-get update
-        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils
+        # Убран устаревший libegl1-mesa, оставлен современный libegl1
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 libxcb-shape0 libxcb-cursor0 x11-utils libegl1 libgl1 libglib2.0-0 libfontconfig1 libdbus-1-3
+        
     - name: Установка Python-библиотек
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-qt pytest-mock
+        
     - name: Запуск тестов клиента
       env:
         QT_QPA_PLATFORM: xcb
@@ -42,13 +47,16 @@ jobs:
         working-directory: ./server/StorageServer
     steps:
     - uses: actions/checkout@v4
+    
     - name: Настройка .NET 10
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
+        
     - name: Восстановление и сборка
       run: |
         dotnet restore
         dotnet build --no-restore --configuration Release
+        
     - name: Запуск тестов сервера
       run: dotnet test --no-build --configuration Release --verbosity normal
