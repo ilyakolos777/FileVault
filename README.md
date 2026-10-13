@@ -2,6 +2,8 @@
 
 [![Full Application CI](https://github.com/ilyakolos777/FileVault/actions/workflows/main.yml/badge.svg)](https://github.com/ilyakolos777/FileVault/actions/workflows/main.yml)   [![Server Tests (C#)](https://github.com/ilyakolos777/FileVault/actions/workflows/server-tests.yml/badge.svg)](https://github.com/ilyakolos777/FileVault/actions/workflows/server-tests.yml)  [![Client Tests (Python)](https://github.com/ilyakolos777/FileVault/actions/workflows/client-tests.yml/badge.svg)](https://github.com/ilyakolos777/FileVault/actions/workflows/client-tests.yml)
 
+[![License: MIT](https://shields.io)](https://opensource.org)
+
 **FileVault** — это надежное клиент-серверное приложение для удаленного управления файлами, построенное на базе собственного протокола прикладного уровня поверх TCP. Проект обеспечивает безопасное хранение, многопоточную передачу данных, строгий аудит действий и автоматическое версионирование файлов.
 
 ## Ключевые возможности
