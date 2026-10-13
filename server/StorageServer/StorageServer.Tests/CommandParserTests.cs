@@ -9,10 +9,10 @@ public class CommandParserTests
     [InlineData("AUTH Admin", "AUTH", 2, "Admin")]
     [InlineData("GET file.txt 100", "GET", 3, "file.txt")]
     [InlineData("  list  ", "LIST", 1, null)]
-    // ИСПРАВЛЕНИЕ: Добавлены ? к input и expectedArg1
     public void Parse_ValidCommands_ReturnsCorrectParsedCommand(string? input, string expectedName, int expectedArgsCount, string? expectedArg1)
     {
-        var result = CommandParser.Parse(input);
+        // Убрали Warning: передаем пустую строку, если input == null
+        var result = CommandParser.Parse(input ?? ""); 
         
         Assert.False(result.IsEmpty);
         Assert.Equal(expectedName, result.Name);
@@ -24,10 +24,9 @@ public class CommandParserTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]
-    // ИСПРАВЛЕНИЕ: Добавлен ? к input
     public void Parse_EmptyOrNull_ReturnsEmptyCommand(string? input)
     {
-        var result = CommandParser.Parse(input);
+        var result = CommandParser.Parse(input ?? ""); 
         Assert.True(result.IsEmpty);
     }
 }

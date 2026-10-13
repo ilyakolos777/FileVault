@@ -39,7 +39,7 @@ def test_transfer_worker_upload(qtbot, mocker):
     args = mock_client.upload_file.call_args[0]
     assert args[0] == "/local.txt"
     assert args[1] == "remote.txt"
-    assert args[2] == 10 
+    assert args[2] == 10
     assert callable(args[3])
 
 

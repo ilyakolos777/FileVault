@@ -19,7 +19,7 @@ class LiquidButton(QPushButton):
         super().__init__(text, parent)
         self.setFixedHeight(54)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setObjectName("loginBtn")  # Важно для сброса QSS
+        self.setObjectName("loginBtn")
 
         self._hover_progress = 0.0
         self._wave_phase = 0.0
@@ -135,29 +135,27 @@ QLineEdit:focus {
     border: 1px solid #6C5DD3;
     background-color: #1A162D;
 }
-
-/* === 3D КНОПКИ ТУЛБАРА === */
 QPushButton {
     background-color: #241F3E;
     border: none;
-    border-bottom: 3px solid #110E1F; /* Создает физический объем 3D */
+    border-bottom: 3px solid #110E1F; 
     border-radius: 8px;
     padding: 8px 16px;
     color: #E2E0EE;
     font-size: 13px;
     font-weight: 600;
     margin-top: 0px;
-    margin-bottom: 3px; /* Компенсация пространства для анимации нажатия */
+    margin-bottom: 3px; 
 }
 QPushButton:hover { 
     background-color: #2E284F; 
-    border-bottom: 3px solid #161326; /* Объем чуть светлеет при наведении */
+    border-bottom: 3px solid #161326; 
     color: #FFFFFF;
 }
 QPushButton:pressed { 
     background-color: #1C1830; 
-    border-bottom: 0px solid transparent; /* Фаска исчезает */
-    margin-top: 3px; /* Кнопка физически проваливается вниз */
+    border-bottom: 0px solid transparent; 
+    margin-top: 3px; 
     margin-bottom: 0px;
 }
 QPushButton:disabled { 
@@ -165,11 +163,9 @@ QPushButton:disabled {
     background-color: #161326; 
     border-bottom: 3px solid #0B0914; 
 }
-
-/* Акцентная кнопка (Загрузить) */
 QPushButton#primaryBtn {
     background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6C5DD3, stop:1 #897BFA);
-    border-bottom: 3px solid #4A3E9C; /* Цветная фаска */
+    border-bottom: 3px solid #4A3E9C;
     color: #FFFFFF;
 }
 QPushButton#primaryBtn:hover { 
@@ -182,12 +178,10 @@ QPushButton#primaryBtn:pressed {
     margin-top: 3px;
     margin-bottom: 0px;
 }
-
-/* Опасная кнопка (Удалить) - сохранен стиль, добавлена физика */
 QPushButton#dangerBtn { 
     background-color: transparent; 
     border: 1px solid #FF4B63; 
-    border-bottom: 3px solid #8C2937; /* Темная красная фаска */
+    border-bottom: 3px solid #8C2937; 
     color: #FF4B63; 
 }
 QPushButton#dangerBtn:hover { 
@@ -202,8 +196,6 @@ QPushButton#dangerBtn:pressed {
     margin-top: 3px;
     margin-bottom: 0px;
 }
-
-/* Отменяем 3D-эффекты QSS для LiquidButton, так как она рисует их сама */
 QPushButton#loginBtn {
     border: none;
     margin: 0px;
@@ -213,8 +205,6 @@ QPushButton#loginBtn {
 QPushButton#loginBtn:hover, QPushButton#loginBtn:pressed {
     background-color: transparent; border: none; margin: 0px;
 }
-
-/* Таблица и прочее */
 QTableWidget {
     background-color: #161326;
     border: none;
@@ -279,7 +269,7 @@ class MainWindow(QMainWindow):
 
         # Таймер для фонового автообновления списка
         self.poll_timer = QTimer(self)
-        self.poll_timer.setInterval(3000)  # Проверка каждые 3 секунды
+        self.poll_timer.setInterval(3000)
         self.poll_timer.timeout.connect(self.silent_poll)
 
         self._init_ui()
@@ -377,6 +367,7 @@ class MainWindow(QMainWindow):
         toolbar_layout.setContentsMargins(16, 16, 16, 16)
         toolbar_layout.setSpacing(10)
 
+        self.btn_refresh = QPushButton("Обновить")
         self.btn_upload = QPushButton("Загрузить файл")
         self.btn_upload.setObjectName("primaryBtn")
         self.btn_download = QPushButton("Скачать")
@@ -388,16 +379,20 @@ class MainWindow(QMainWindow):
         self.btn_delete.setObjectName("dangerBtn")
         self.btn_disconnect = QPushButton("Отключиться")
 
+        self.btn_refresh.clicked.connect(self.load_file_list)
         self.btn_upload.clicked.connect(self.upload_action)
-        self.btn_download.clicked.connect(lambda: self.download_action(False))
-        self.btn_download_bak.clicked.connect(lambda: self.download_action(True))
+
+        # Исправленные lambda-выражения для корректной передачи параметров
+        self.btn_download.clicked.connect(lambda checked=False: self.download_action(False))
+        self.btn_download_bak.clicked.connect(lambda checked=False: self.download_action(True))
+
         self.btn_rename.clicked.connect(self.rename_action)
         self.btn_delete.clicked.connect(self.delete_action)
         self.btn_history_file.clicked.connect(self.history_file_action)
-        self.btn_history_all.clicked.connect(lambda: self.history_action(""))
+        self.btn_history_all.clicked.connect(lambda checked=False: self.history_action(""))
         self.btn_disconnect.clicked.connect(self.action_disconnect)
 
-        buttons = [ self.btn_upload, self.btn_download, self.btn_download_bak,
+        buttons = [self.btn_refresh, self.btn_upload, self.btn_download, self.btn_download_bak,
                    self.btn_rename, self.btn_history_file, self.btn_history_all,
                    self.btn_delete, self.btn_disconnect]
 
@@ -448,19 +443,18 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"Подключено как {user}")
             self._set_workspace_mode()
             self.load_file_list()
-            self.poll_timer.start()  # Включаем фоновый поллинг файлов
+            self.poll_timer.start()
         except Exception as e:
             QMessageBox.critical(self, "Ошибка подключения", str(e))
 
     def action_disconnect(self):
-        self.poll_timer.stop()  # Останавливаем таймер
+        self.poll_timer.stop()
         self.client.disconnect()
         self.connected = False
         self.table.setRowCount(0)
         self._set_login_mode()
 
     def silent_poll(self):
-        # Тихий поллинг, только если нет активных задач (скачивания или загрузки)
         if len(self._workers) > 0:
             return
         worker = ActionWorker(self.client.get_list)
@@ -478,6 +472,7 @@ class MainWindow(QMainWindow):
 
     def _populate_table(self, data: str):
         selected_filename = self.get_selected_filename()
+
         self.table.setRowCount(0)
         if not data: return
 
@@ -491,7 +486,7 @@ class MainWindow(QMainWindow):
 
                 item_name = QTableWidgetItem(safe_name)
                 item_size = QTableWidgetItem(format_size(exact_bytes))
-                item_size.setData(Qt.ItemDataRole.UserRole, exact_bytes)  # Сохраняем точные байты
+                item_size.setData(Qt.ItemDataRole.UserRole, exact_bytes)
                 item_date = QTableWidgetItem(parts[2])
 
                 has_bak = parts[3] == "has_bak"
@@ -549,6 +544,22 @@ class MainWindow(QMainWindow):
 
         self._start_transfer("upload", local_path, filename, is_bak=False, offset=offset)
 
+    def download_action(self, is_bak: bool = False):
+        filename = self.get_selected_filename()
+        if not filename:
+            QMessageBox.warning(self, "Внимание", "Выберите файл в списке.")
+            return
+
+        if is_bak and self.table.item(self.table.currentRow(), 3).text() == "-":
+            QMessageBox.warning(self, "Внимание", "У этого файла нет резервной копии.")
+            return
+
+        default_name = filename + ".bak" if is_bak else filename
+        local_path, _ = QFileDialog.getSaveFileName(self, "Сохранить файл как", default_name)
+        if not local_path: return
+
+        self._start_transfer("download", local_path, filename, is_bak=is_bak, offset=0)
+
     def _start_transfer(self, action: str, local_path: str, remote_name: str, is_bak: bool = False, offset: int = 0):
         self.progress_bar.show()
         self.progress_bar.setValue(0)
@@ -556,18 +567,6 @@ class MainWindow(QMainWindow):
         self.status_label.setStyleSheet("color: #6C5DD3; font-weight: 600;")
 
         transfer_worker = TransferWorker(action, self.client, local_path, remote_name, is_bak, offset)
-        transfer_worker.progress.connect(self._update_progress)
-        transfer_worker.finished.connect(self._transfer_finished)
-        transfer_worker.error.connect(self._transfer_error)
-        self._run_worker(transfer_worker)
-
-    def _start_transfer(self, action: str, local_path: str, remote_name: str, is_bak: bool = False):
-        self.progress_bar.show()
-        self.progress_bar.setValue(0)
-        self.status_label.setText("Синхронизация..." if action == "upload" else "Загрузка...")
-        self.status_label.setStyleSheet("color: #6C5DD3; font-weight: 600;")
-
-        transfer_worker = TransferWorker(action, self.client, local_path, remote_name, is_bak)
         transfer_worker.progress.connect(self._update_progress)
         transfer_worker.finished.connect(self._transfer_finished)
         transfer_worker.error.connect(self._transfer_error)
@@ -592,7 +591,8 @@ class MainWindow(QMainWindow):
     def delete_action(self):
         filename = self.get_selected_filename()
         if not filename:
-            return QMessageBox.warning(self, "Внимание", "Выберите файл в списке для удаления.")
+            QMessageBox.warning(self, "Внимание", "Выберите файл в списке для удаления.")
+            return
 
         if QMessageBox.question(self, "Подтверждение", f"Удалить файл {filename} (включая бэкапы)?",
                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
@@ -604,7 +604,8 @@ class MainWindow(QMainWindow):
     def rename_action(self):
         old_name = self.get_selected_filename()
         if not old_name:
-            return QMessageBox.warning(self, "Внимание", "Выберите файл в списке для переименования.")
+            QMessageBox.warning(self, "Внимание", "Выберите файл в списке для переименования.")
+            return
 
         new_name, ok = QInputDialog.getText(self, "Переименовать", "Новое имя файла:", text=old_name)
         if ok and new_name and new_name != old_name:
@@ -621,7 +622,9 @@ class MainWindow(QMainWindow):
 
     def history_file_action(self):
         filename = self.get_selected_filename()
-        if not filename: return QMessageBox.warning(self, "Внимание", "Выберите файл для просмотра его истории.")
+        if not filename:
+            QMessageBox.warning(self, "Внимание", "Выберите файл для просмотра его истории.")
+            return
         self.history_action(filename)
 
     def show_history_dialog(self, text: str):

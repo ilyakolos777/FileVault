@@ -167,9 +167,12 @@ def test_upload_file(client, mocker):
     mocker.patch.object(client, "_read_text_response", return_value="Success")
     mock_callback = MagicMock()
     mock_file = mock_open(read_data=b"Data")
+
+    from unittest.mock import patch
     with patch("builtins.open", mock_file):
         client.upload_file("/fake.txt", "test.txt", callback=mock_callback)
 
-    client.sock.sendall.assert_any_call(b"PUT test.txt 4\r\n")
+    # ИСПРАВЛЕНО: добавлено смещение "0" в ожидаемый пакет, так как мы изменили протокол
+    client.sock.sendall.assert_any_call(b"PUT test.txt 4 0\r\n")
     client.sock.sendall.assert_any_call(b"Data")
     mock_callback.assert_called_with(4, 4)

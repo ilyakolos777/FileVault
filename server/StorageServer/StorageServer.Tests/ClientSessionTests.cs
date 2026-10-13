@@ -180,19 +180,18 @@ public class ClientSessionTests : IDisposable
     }
 
     [Fact]
-    public async Task PathTraversalAttack_IsBlocked_ReturnsError403()
+    public async Task PathTraversalAttack_IsSanitized_ReturnsError404()
     {
         await RunSessionTestAsync(async (client, stream) =>
         {
-            await SendCommandAsync(stream, "AUTH Admin");
+            await SendCommandAsync(stream, "AUTH Admin_4");
             await ReadTextResponseAsync(stream);
 
-            // Пытаемся получить доступ к директории выше
+            // Сервер очистит путь до "cmd.exe". Поскольку такого файла в хранилище нет, вернется 404.
             await SendCommandAsync(stream, "GET ../../../windows/system32/cmd.exe 0");
             string errorResp = await ReadTextResponseAsync(stream);
             
-            // Сервер должен перехватить UnauthorizedAccessException и вернуть 403
-            Assert.StartsWith("ERR 403", errorResp);
+            Assert.StartsWith("ERR 404", errorResp);
         });
     }
 

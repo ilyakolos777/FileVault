@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using Xunit;
 using StorageServer.Storage;
 
@@ -12,16 +13,13 @@ public class StorageManagerTests : IDisposable
 
     public StorageManagerTests()
     {
-        // Создаем уникальную временную папку для каждого теста
         _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
-        
         _storage = new StorageManager(_tempDir);
     }
 
     public void Dispose()
     {
-        // Очищаем файловую систему после завершения теста
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, true);
     }
@@ -35,10 +33,12 @@ public class StorageManagerTests : IDisposable
     }
 
     [Fact]
-    public void GetSafePath_PathTraversalAttempt_ThrowsException()
+    public void GetSafePath_PathTraversalAttempt_ReturnsOnlyFilename()
     {
-        // Проверка защиты от выхода за пределы корневой директории
-        Assert.Throws<UnauthorizedAccessException>(() => _storage.GetSafePath("../../../windows/system32"));
+        // Теперь метод игнорирует вредоносный путь и безопасно извлекает только имя файла
+        string expected = Path.Combine(_tempDir, "cmd.exe");
+        string actual = _storage.GetSafePath("../../../windows/system32/cmd.exe");
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
@@ -49,7 +49,6 @@ public class StorageManagerTests : IDisposable
         
         _storage.BackupIfExists(filename);
         
-        // Проверяем, что резервная копия была создана и добавлено расширение .bak[cite: 1]
         Assert.True(File.Exists(Path.Combine(_tempDir, filename + ".bak")));
     }
 
@@ -61,15 +60,11 @@ public class StorageManagerTests : IDisposable
         File.WriteAllText(Path.Combine(_tempDir, "file2.txt"), "12345");
     
         string result = _storage.GetFilesList();
-    
-        // Сортируем строки по алфавиту для стабильности теста на любых ОС
         string[] lines = result.Split('\n').OrderBy(l => l).ToArray();
     
         Assert.Equal(2, lines.Length);
-    
         Assert.Contains("file1.txt|3|", lines[0]);
         Assert.Contains("|has_bak", lines[0]);
-    
         Assert.Contains("file2.txt|5|", lines[1]);
         Assert.Contains("|no_bak", lines[1]);
     }
@@ -83,7 +78,6 @@ public class StorageManagerTests : IDisposable
         
         _storage.DeleteFile(filename);
         
-        // Проверяем, что удаляется и основной файл, и его бэкап[cite: 1]
         Assert.False(File.Exists(Path.Combine(_tempDir, filename)));
         Assert.False(File.Exists(Path.Combine(_tempDir, filename + ".bak")));
     }
@@ -105,14 +99,5 @@ public class StorageManagerTests : IDisposable
     public void OpenRead_NonExistentFile_ThrowsFileNotFoundException()
     {
         Assert.Throws<FileNotFoundException>(() => _storage.OpenRead("missing.txt"));
-    }
-    
-    [Fact]
-    public void GetSafePath_PathTraversalAttempt_ReturnsOnlyFilename()
-    {
-        // Метод должен проигнорировать злонамеренный путь и вытащить только "cmd.exe"
-        string expected = Path.Combine(_tempDir, "cmd.exe");
-        string actual = _storage.GetSafePath("../../../windows/system32/cmd.exe");
-        Assert.Equal(expected, actual);
     }
 }

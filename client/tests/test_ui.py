@@ -90,15 +90,14 @@ def test_download_action_no_bak(app_window, mocker):
     app_window.download_action(is_bak=True)
     mock_msg.assert_called_once_with(app_window, "Внимание", "У этого файла нет резервной копии.")
 
-
 def test_download_action_success(app_window, mocker):
     app_window._populate_table("file.txt|10|date|has_bak")
     app_window.table.selectRow(0)
     mocker.patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/local/file.txt", ""))
     mock_start = mocker.patch.object(app_window, "_start_transfer")
-    app_window.download_action()
-    mock_start.assert_called_once_with("download", "/local/file.txt", "file.txt", False, offset=0)
 
+    app_window.download_action()
+    mock_start.assert_called_once_with("download", "/local/file.txt", "file.txt", is_bak=False, offset=0)
 
 def test_delete_action_success(app_window, mocker):
     app_window._populate_table("file.txt|10|date|has_bak")
